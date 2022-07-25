@@ -45,7 +45,7 @@ python evaluate.py dataset_extra_field/tatqa_and_hqa_field_dev.json tag_op/model
 ```
 
 ## Difference with Paper Method
-The code in the repo supports joint training of both factual and hypothetical questions. Note that if you want to add the matching block of TAT-HQA, i.e. set the --cross_attn_layer > 0, you probably have to first train on factual questions and fine-tune on hypothetical questions as described in TAT-HQA paper, otherwise the performance of hypothetical questions will have problem. 
+The code in this repo supports joint training of both factual and hypothetical questions. Note that if you want to add the matching block of TAT-HQA, i.e. set the --cross_attn_layer > 0, you probably have to first train on factual questions and fine-tune on hypothetical questions as described in TAT-HQA paper, otherwise the performance of hypothetical questions will have problem. 
 
 ## Citation 
 ```bash

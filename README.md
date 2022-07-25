@@ -8,7 +8,7 @@ The data used for the competition is from **TAT-QA** ([paper](https://aclantholo
 
 The released training data `tatqa_and_hqa_dataset_train.json` is stored in `dataset_raw`, containing 13,251 factual questions and 6,621 hypothetical questions with ground-truth answers. You can split the data into training and validation set. 
 
-Note that to implement the methods in TAT-QA and TAT-HQA paper, we need to heuristically generate some extra fields from the original data, e.g. answer mapping, deriving operators. The data file containing the generated fields is in `dataset_extra_field`. It is optional to use the file. 
+Note that to implement the methods in TAT-QA and TAT-HQA paper, we need to heuristically generate some extra fields from the original data, e.g. answer mapping, deriving operators. The data file containing the generated fields is in `dataset_extra_field`. You can optionally use the file.
 
 We name the the training and validation data split as `tatqa_and_hqa_field_[train/dev].json` and store in `dataset_extra_field`, which will be processed as the input of the model. 
 

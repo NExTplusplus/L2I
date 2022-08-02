@@ -218,32 +218,18 @@ class TaTQAEmAndF1(object):
         self._total_em = 0.0
         self._total_f1 = 0.0
         self._scale_em = 0.0
-        self._op_em = 0.0
-        self._order_em = 0.0
-        self.op_correct_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Sum": 0, "Count": 0, "Average": 0,
-                         "Multiplication": 0, "Division": 0, "Difference": 0, "Change ratio": 0, "ignore":0}
-        self.op_total_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Sum": 0, "Count": 0, "Average": 0,
-                         "Multiplication": 0, "Division": 0, "Difference": 0, "Change ratio": 0, "ignore":0}
+
         self.scale_correct_count = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
         self.scale_total_count = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
-        self.if_op_total_count = {"NONE": 0, "SWAP":0, "ADD": 0, "MINUS": 0, "MULTIPLY": 0, "DIVISION": 0, "PERCENTAGE_INC":0, "PERCENTAGE_DEC":0, "SWAP_MIN_NUM":0}
-        self.order_correct_count = {1:0, 0:0}
-        self.order_total_count =  {1:0, 0:0}
-        
-        self.if_op_em_sum = {"NONE": 0, "SWAP":0, "ADD": 0, "MINUS": 0, "MULTIPLY": 0, "DIVISION": 0, "PERCENTAGE_INC":0, "PERCENTAGE_DEC":0, "SWAP_MIN_NUM":0}
-        self.if_op_f1_sum = {"NONE": 0, "SWAP":0, "ADD": 0, "MINUS": 0, "MULTIPLY": 0, "DIVISION": 0, "PERCENTAGE_INC":0, "PERCENTAGE_DEC":0, "SWAP_MIN_NUM":0}
-        
-        self.answer_type_total_count = {"count":0, "span":0, "multi-span":0, "arithmetic":0}
-        self.answer_type_em_sum = {"count":0, "span":0, "multi-span":0, "arithmetic":0}
-        self.answer_type_f1_sum = {"count":0, "span":0, "multi-span":0, "arithmetic":0}
-        self.answer_type_span_em_sum = {"count":0, "span":0, "multi-span":0, "arithmetic":0}
-        self.answer_type_span_f1_sum = {"count":0, "span":0, "multi-span":0, "arithmetic":0}
+
+        self.answer_type_total_count = {"count":0, "span":0, "multi-span":0, "arithmetic":0, "counterfactual": 0, "":0}
+        self.answer_type_em_sum = {"count":0, "span":0, "multi-span":0, "arithmetic":0, "counterfactual": 0, "":0}
+        self.answer_type_f1_sum = {"count":0, "span":0, "multi-span":0, "arithmetic":0, "counterfactual": 0, "":0}
         
         self._count = 0
         self._details = []
 
-    def __call__(self, ground_truth: dict, prediction: Union[str, List],  pred_type, pred_scale="", pred_span = None, gold_span = None,
-                 pred_op=None, gold_op=None, pred_order = None, gold_order = None):  # type: ignore
+    def __call__(self, ground_truth: dict, prediction: Union[str, List],  pred_type, pred_scale="", pred_span = None, gold_span = None):  # type: ignore
         """
         Parameters
         ----------
@@ -267,17 +253,6 @@ class TaTQAEmAndF1(object):
         #             prediction_strings,
         #             ground_truth_answer_strings
         #     )
-
-        if pred_op is not None:
-            if pred_op == gold_op:
-                self.op_correct_count[pred_op] += 1
-                self._op_em += 1
-            self.op_total_count[gold_op] += 1
-        if pred_order is not None:
-            if pred_order == gold_order:
-                self.order_correct_count[pred_order] += 1
-                self._order_em += 1
-            self.order_total_count[gold_order] += 1
 
         if pred_scale == ground_truth["scale"]:
             self.scale_correct_count[pred_scale] += 1
@@ -309,6 +284,8 @@ class TaTQAEmAndF1(object):
                 )
                 if gold_type in ['arithmetic', 'count']:
                     """if gold type equals with arithmetic and count, set the f1_score == exact_match"""
+                    if f1_score != exact_match:
+                        print(f1_score, exact_match)
                     f1_score = exact_match
                 if not pred_span:
                     span_exact_match = 0
@@ -325,15 +302,9 @@ class TaTQAEmAndF1(object):
         self._total_f1 += f1_score
         self._count += 1
         
-        self.if_op_total_count[ground_truth["gold_if_op"]] += 1
-        self.if_op_em_sum[ground_truth["gold_if_op"]] += exact_match
-        self.if_op_f1_sum[ground_truth["gold_if_op"]] += f1_score
-        
         self.answer_type_total_count[ground_truth["answer_type"]] += 1
         self.answer_type_em_sum[ground_truth["answer_type"]] += exact_match
         self.answer_type_f1_sum[ground_truth["answer_type"]] += f1_score
-        self.answer_type_span_em_sum[ground_truth["answer_type"]] += span_exact_match
-        self.answer_type_span_f1_sum[ground_truth["answer_type"]] += span_f1_score
         
         it = {**ground_truth,
               **{"pred":prediction,
@@ -357,56 +328,30 @@ class TaTQAEmAndF1(object):
         exact_match = self._total_em / self._count if self._count > 0 else 0
         f1_score = self._total_f1 / self._count if self._count > 0 else 0
         scale_score = self._scale_em / self._count if self._count > 0 else 0
-        op_score = self._op_em / self._count if self._count > 0 else 0
-        order_score = self._order_em / (self.order_total_count[0] + self.order_total_count[1]) if self.order_total_count[0] + self.order_total_count[1] > 0 else 0
-        op_em_detail = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Sum": 0, "Count": 0, "Average": 0,
-                               "Multiplication": 0, "Division": 0, "Difference": 0, "Change ratio": 0}
-        scale_em_detail = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
-        order_em_detail = {1:0, 0:0}
-        if_op_em_detail = {"NONE": 0, "SWAP":0, "ADD": 0, "MINUS": 0, "MULTIPLY": 0, "DIVISION": 0, "PERCENTAGE_INC":0, "PERCENTAGE_DEC":0, "SWAP_MIN_NUM":0}
-        if_op_f1_detail = {"NONE": 0, "SWAP":0, "ADD": 0, "MINUS": 0, "MULTIPLY": 0, "DIVISION": 0, "PERCENTAGE_INC":0, "PERCENTAGE_DEC":0, "SWAP_MIN_NUM":0}
-        
-        answer_type_em_detail = {"count":0, "span":0, "multi-span":0, "arithmetic":0}
-        answer_type_f1_detail = {"count":0, "span":0, "multi-span":0, "arithmetic":0}
-        answer_type_span_em_detail = {"count":0, "span":0, "multi-span":0, "arithmetic":0}
-        answer_type_span_f1_detail = {"count":0, "span":0, "multi-span":0, "arithmetic":0}
 
-        for k in self.op_correct_count.keys():
-            op_em_detail[k] = self.op_correct_count[k] / self.op_total_count[k] if self.op_total_count[k] > 0 else 0
-        print("op acc:", op_em_detail)
-        print("op total cnt:", self.op_total_count)
-        for k in self.order_correct_count.keys():
-            order_em_detail[k] = self.order_correct_count[k] / self.order_total_count[k] if self.order_total_count[k] > 0 else 0
-        print("order acc:", order_em_detail)
-        print("order total cnt:", self.order_total_count)
+        scale_em_detail = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
+        
+        answer_type_em_detail = {"count":0, "span":0, "multi-span":0, "arithmetic":0, "counterfactual": 0, "":0}
+        answer_type_f1_detail = {"count":0, "span":0, "multi-span":0, "arithmetic":0, "counterfactual": 0,"":0}
+        
         for k in scale_em_detail.keys():
             scale_em_detail[k] = self.scale_correct_count[k] / self.scale_total_count[k] if self.scale_total_count[k] > 0 else 0
         print("scale acc:", scale_em_detail)
         print("scale count:", self.scale_total_count)
-        
-        for k in if_op_em_detail:
-            if_op_em_detail[k] = self.if_op_em_sum[k] / self.if_op_total_count[k] if self.if_op_total_count[k] > 0 else 0
-        for k in if_op_f1_detail:
-            if_op_f1_detail[k] = self.if_op_f1_sum[k] / self.if_op_total_count[k] if self.if_op_total_count[k] > 0 else 0
-        print("em by if op:", if_op_em_detail)
-        print("f1 by if op:", if_op_f1_detail)
-        print("if op count:", self.if_op_total_count)
  
         for k in answer_type_em_detail:
             answer_type_em_detail[k] = self.answer_type_em_sum[k] / self.answer_type_total_count[k] if self.answer_type_total_count[k] > 0 else 0
-            answer_type_span_em_detail[k] = self.answer_type_span_em_sum[k] / self.answer_type_total_count[k] if self.answer_type_total_count[k] > 0 else 0
+            #answer_type_span_em_detail[k] = self.answer_type_span_em_sum[k] / self.answer_type_total_count[k] if self.answer_type_total_count[k] > 0 else 0
         for k in answer_type_f1_detail:
             answer_type_f1_detail[k] = self.answer_type_f1_sum[k] / self.answer_type_total_count[k] if self.answer_type_total_count[k] > 0 else 0
-            answer_type_span_f1_detail[k] = self.answer_type_span_f1_sum[k] / self.answer_type_total_count[k] if self.answer_type_total_count[k] > 0 else 0
+            #answer_type_span_f1_detail[k] = self.answer_type_span_f1_sum[k] / self.answer_type_total_count[k] if self.answer_type_total_count[k] > 0 else 0
         print("em by answer type:", answer_type_em_detail)
-        print("span em by answer type:", answer_type_span_em_detail)
         print("f1 by answer type:", answer_type_f1_detail)
-        print("span f1 by answer type:", answer_type_span_f1_detail)
         print("answer type count:", self.answer_type_total_count)
  
         if reset:
             self.reset()
-        return exact_match, f1_score, scale_score, op_score, order_score
+        return exact_match, f1_score, scale_score
 
     def get_detail_metric(self):
         df = pd.DataFrame(self._details)
@@ -433,29 +378,15 @@ class TaTQAEmAndF1(object):
         self._total_em = 0.0
         self._total_f1 = 0.0
         self._scale_em = 0.0
-        self._op_em = 0.0
-        self._order_em = 0.0
+
         self._count = 0
         self._details = []
-        self.op_correct_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Sum": 0, "Count": 0, "Average": 0,
-                                 "Multiplication": 0, "Division": 0, "Difference": 0, "Change ratio": 0, "ignore":0}
-        self.op_total_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Sum": 0, "Count": 0, "Average": 0,
-                               "Multiplication": 0, "Division": 0, "Difference": 0, "Change ratio": 0, "ignore":0}
         self.scale_correct_count = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
         self.scale_total_count = {"": 0, "thousand": 0, "million": 0, "billion": 0, "percent": 0}
-        self.order_correct_count = {0:0, 1:0}
-        self.order_total_count = {0:0, 1:0}
-        
-        self.if_op_em_sum = {"NONE": 0, "SWAP":0, "ADD": 0, "MINUS": 0, "MULTIPLY": 0, "DIVISION": 0, "PERCENTAGE_INC":0, "PERCENTAGE_DEC":0, "SWAP_MIN_NUM":0}
-        self.if_op_f1_sum = {"NONE": 0, "SWAP":0, "ADD": 0, "MINUS": 0, "MULTIPLY": 0, "DIVISION": 0, "PERCENTAGE_INC":0, "PERCENTAGE_DEC":0, "SWAP_MIN_NUM":0}
-        self.if_op_total_count = {"NONE": 0, "SWAP":0, "ADD": 0, "MINUS": 0, "MULTIPLY": 0, "DIVISION": 0, "PERCENTAGE_INC":0, "PERCENTAGE_DEC":0, "SWAP_MIN_NUM":0}
-        
-        self.answer_type_em_sum = {"count":0, "span":0, "multi-span":0, "arithmetic":0}
-        self.answer_type_f1_sum = {"count":0, "span":0, "multi-span":0, "arithmetic":0}
-        self.answer_type_total_count = {"count":0, "span":0, "multi-span":0, "arithmetic":0}
-        self.answer_type_span_em_sum = {"count":0, "span":0, "multi-span":0, "arithmetic":0}
-        self.answer_type_span_f1_sum = {"count":0, "span":0, "multi-span":0, "arithmetic":0}
-        
+                
+        self.answer_type_total_count = {"count":0, "span":0, "multi-span":0, "arithmetic":0, "counterfactual": 0, "":0}
+        self.answer_type_em_sum = {"count":0, "span":0, "multi-span":0, "arithmetic":0, "counterfactual": 0, "":0}
+        self.answer_type_f1_sum = {"count":0, "span":0, "multi-span":0, "arithmetic":0, "counterfactual": 0, "":0}
         
     def __str__(self):
         return f"TaTQAEmAndF1(em={self._total_em}, f1={self._total_f1}, count={self._count})"

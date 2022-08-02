@@ -173,24 +173,13 @@ class TaTQATestBatchGen(object):
             table_cell_numbers = item["table_cell_number_value"]
             table_cell_index = torch.from_numpy(item["table_cell_index"])
             table_cell_tokens = item["table_cell_tokens"]
-
-            tag_labels = torch.from_numpy(item["tag_labels"])
-            if_tag_labels = torch.from_numpy(item["if_tag_labels"])
-
             gold_answers = item["answer_dict"]
             question_id = item["question_id"]
-            paragraph_mapping_content = item["paragraph_mapping_content"]
-            table_mapping_content = item["table_mapping_content"]
-            counter_arithmetic_mask = torch.tensor(item["is_counter_arithmetic"]) # re-calculated in forward() with the predicted operator.
-            original_mask = torch.tensor(item["is_original"])
-            
             all_data.append((input_ids, qtp_attention_mask,
                              question_if_part_attention_mask, token_type_ids,
                              paragraph_mask, paragraph_numbers, paragraph_index, paragraph_tokens,
                              table_mask, table_cell_numbers, table_cell_index, table_cell_tokens,
-                             tag_labels, if_tag_labels,
-                             gold_answers, question_id, paragraph_mapping_content, table_mapping_content,
-                             counter_arithmetic_mask, original_mask))
+                             gold_answers, question_id))
         print("Load data size {}.".format(len(all_data)))
         self.data = TaTQATestBatchGen.make_batches(all_data, args.batch_size if self.is_train else args.eval_batch_size,
                                                self.is_train)
@@ -227,10 +216,7 @@ class TaTQATestBatchGen(object):
             question_if_part_attention_mask_batch, token_type_ids_batch,\
             paragraph_mask_batch, paragraph_numbers_batch, paragraph_index_batch, paragraph_tokens_batch,\
             table_mask_batch, table_cell_numbers_batch, table_cell_index_batch, table_cell_tokens_batch,\
-            tag_labels_batch, if_tag_labels_batch,\
-            gold_answers_batch, question_ids_batch, \
-            paragraph_mapping_content_batch, table_mapping_content_batch,\
-            counter_arithmetic_mask_batch, original_mask_batch = zip(*batch)
+            gold_answers_batch, question_ids_batch = zip(*batch)
             
             bsz = len(batch)
             input_ids = torch.LongTensor(bsz, 512)
@@ -245,15 +231,8 @@ class TaTQATestBatchGen(object):
             table_cell_numbers = []
             table_cell_index = torch.LongTensor(bsz, 512)
             table_cell_tokens = []
-            tag_labels = torch.LongTensor(bsz, 512)
-            if_tag_labels = torch.LongTensor(bsz, 512)
             gold_answers = []
             question_ids = []
-            paragraph_mapping_content = []
-            table_mapping_content = []
-            counter_arithmetic_mask = torch.LongTensor(bsz)
-            original_mask = torch.LongTensor(bsz)
-            
             
             for i in range(bsz):
                 input_ids[i] = input_ids_batch[i]
@@ -268,22 +247,15 @@ class TaTQATestBatchGen(object):
                 table_cell_numbers.append(table_cell_numbers_batch[i])
                 table_cell_index[i] = table_cell_index_batch[i]
                 table_cell_tokens.append(table_cell_tokens_batch[i])
-                tag_labels[i] = tag_labels_batch[i]
-                if_tag_labels[i] = if_tag_labels_batch[i]
                 gold_answers.append(gold_answers_batch[i])
                 question_ids.append(question_ids_batch[i])
-                paragraph_mapping_content.append(paragraph_mapping_content_batch[i])
-                table_mapping_content.append(table_mapping_content_batch[i])
-                counter_arithmetic_mask[i] = counter_arithmetic_mask_batch[i]
-                original_mask[i] = original_mask_batch[i]
                 
             out_batch = {"input_ids": input_ids, "qtp_attention_mask":qtp_attention_mask,
                 "question_if_part_attention_mask": question_if_part_attention_mask, "token_type_ids":token_type_ids,
                 "paragraph_mask": paragraph_mask, "paragraph_numbers": paragraph_numbers, "paragraph_index": paragraph_index, "paragraph_tokens": paragraph_tokens,
                 "table_mask": table_mask, "table_cell_numbers": table_cell_numbers, "table_cell_index": table_cell_index, "table_cell_tokens": table_cell_tokens,
-                "tag_labels": tag_labels, "if_tag_labels": if_tag_labels, "gold_answers": gold_answers,
-                "question_ids": question_ids, "paragraph_mapping_content": paragraph_mapping_content, "table_mapping_content": table_mapping_content,
-                "counter_arithmetic_mask": counter_arithmetic_mask, "original_mask": original_mask
+                "gold_answers": gold_answers,
+                "question_ids": question_ids,
             }
 
             if self.args.cuda:

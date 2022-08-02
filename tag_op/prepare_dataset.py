@@ -14,6 +14,7 @@ parser.add_argument("--question_length_limit", type=int, default=46)
 parser.add_argument("--encoder", type=str, default="bert")
 parser.add_argument("--mode", type=str, default='train')
 parser.add_argument("--roberta_model", type=str, default='')
+parser.add_argument("--data_format", type=str, default="tatqa_and_hqa_field_{}.json")
 
 args = parser.parse_args()
 
@@ -36,7 +37,7 @@ else:
     data_reader = TagTaTQAReader(tokenizer, args.passage_length_limit, args.question_length_limit, sep=sep)
     data_mode = ["train"]
 
-data_format = "tatqa_and_hqa_field_{}.json"
+data_format = args.data_format
 print(f'==== NOTE ====: encoder:{args.encoder}, mode:{args.mode}')
 
 for dm in data_mode:

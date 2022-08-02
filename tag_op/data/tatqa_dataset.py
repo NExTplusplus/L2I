@@ -1,4 +1,4 @@
-import re
+import re, copy
 import string
 import json
 from tqdm import tqdm
@@ -706,6 +706,99 @@ def _concat(question_and_if_ids,
     return input_ids, qtp_attention_mask, question_if_part_attention_mask, paragraph_mask, paragraph_number_value, paragraph_index, paragraph_tokens, \
            table_mask, table_cell_number_value, table_index, tags, if_tags, input_segments
 
+def _test_concat(question_and_if_ids,
+            question_and_if_index,
+            question_if_part_indicator,
+            question_and_if_number_value,
+            question_and_if_tokens,
+            paragraph_ids,
+            paragraph_index,
+            paragraph_number_value,
+            paragraph_tokens,
+            table_ids,
+            table_cell_index,
+            table_cell_number_value,
+            sep_start,
+            sep_end,
+            question_length_limitation,
+            passage_length_limitation,
+            max_pieces):
+    in_table_cell_index = table_cell_index.copy()
+    in_paragraph_index = paragraph_index.copy()
+    
+    input_ids = torch.zeros([1, max_pieces])
+    input_segments = torch.zeros_like(input_ids)
+    paragraph_mask = torch.zeros_like(input_ids)
+    paragraph_index = torch.zeros_like(input_ids)
+    table_mask = torch.zeros_like(input_ids)
+    table_index = torch.zeros_like(input_ids)
+    question_if_part_attention_mask = torch.zeros_like(input_ids)
+
+    truncated_question = False
+    if question_length_limitation is not None:
+        if len(question_and_if_ids) > question_length_limitation:
+            question_and_if_ids = question_and_if_ids[:question_length_limitation]
+            question_if_part_indicator = question_if_part_indicator[:question_length_limitation]
+            question_and_if_index = question_and_if_index[:question_length_limitation]
+            truncated_question = True
+    
+    question_ids = [sep_start] + question_and_if_ids + [sep_end]
+    question_if_part_indicator = [0] + question_if_part_indicator
+    question_if_part_attention_mask[0, :len(question_if_part_indicator)] = torch.from_numpy(np.array(question_if_part_indicator))
+    
+    question_length = len(question_ids)
+    table_length = len(table_ids)
+    paragraph_length = len(paragraph_ids)
+    if passage_length_limitation is not None:
+        if len(table_ids) > passage_length_limitation:
+            passage_ids = table_ids[:passage_length_limitation]
+            table_length = passage_length_limitation
+            paragraph_length = 0
+        elif len(table_ids) + len(paragraph_ids) + 1> passage_length_limitation:
+            passage_ids = table_ids + [sep_end] + paragraph_ids
+            passage_ids = passage_ids[:passage_length_limitation]
+            table_length = len(table_ids)
+            paragraph_length = passage_length_limitation - table_length - 1
+        else:
+            passage_ids = table_ids + [sep_end] + paragraph_ids
+            table_length = len(table_ids)
+            paragraph_length = len(paragraph_ids)
+    else:
+        passage_ids = table_ids + [sep_end] + paragraph_ids
+
+    passage_ids = passage_ids + [sep_end]
+
+    input_ids[0, :question_length] = torch.from_numpy(np.array(question_ids))
+    input_ids[0, question_length:question_length + len(passage_ids)] = torch.from_numpy(np.array(passage_ids))
+    qtp_attention_mask = input_ids != 0
+    qtp_attention_mask = qtp_attention_mask.int()
+    qtp_attention_mask = (1 - question_if_part_attention_mask) * qtp_attention_mask
+    assert (qtp_attention_mask == -1).any() == False
+    
+    table_mask[0, question_length:question_length + table_length] = 1
+    table_index[0, question_length:question_length + table_length] = \
+        torch.from_numpy(np.array(in_table_cell_index[:table_length]))
+
+    paragraph_mask[0, 1: question_length - 1] = 1
+    paragraph_mask[0, question_length + table_length + 1:question_length + table_length + 1 + paragraph_length] = 1
+    
+    max_question_index = question_and_if_index[:question_length - 2][-1]
+    if truncated_question == False:
+        assert max_question_index == question_and_if_index[-1]
+        assert len(question_and_if_number_value) == max_question_index
+    
+    paragraph_index[0, 1:question_length - 1] = torch.from_numpy(np.array(question_and_if_index[:question_length - 2]))
+    
+    paragraph_index[0, question_length + table_length + 1: question_length + table_length + 1 + paragraph_length] = \
+        torch.from_numpy(np.array(in_paragraph_index[:paragraph_length]) + max_question_index)
+    
+    # truncate these
+    paragraph_number_value  = question_and_if_number_value[:max_question_index] + paragraph_number_value
+    paragraph_tokens = question_and_if_tokens[:max_question_index] + paragraph_tokens
+    
+    return input_ids, qtp_attention_mask, question_if_part_attention_mask, paragraph_mask, paragraph_number_value, paragraph_index, paragraph_tokens, \
+           table_mask, table_cell_number_value, table_index, input_segments
+
 
 
 """
@@ -989,7 +1082,7 @@ class TagTaTQATestReader(object):
 
     def _make_instance(self, input_ids, question_if_part_input_ids, attention_mask, token_type_ids, paragraph_mask, table_mask, question_if_part_attention_mask,
                        paragraph_number_value, table_cell_number_value, question_if_part_number_value, paragraph_index, table_cell_index,
-                       question_if_part_index, tags, if_tags, paragraph_tokens, table_cell_tokens, answer_dict, question_id,
+                       question_if_part_index, paragraph_tokens, table_cell_tokens, answer_dict, question_id,
                        paragraph_mapping_content, table_mapping_content):
         return {
             "input_ids": np.array(input_ids),
@@ -1005,14 +1098,10 @@ class TagTaTQATestReader(object):
             "paragraph_index": np.array(paragraph_index),
             "table_cell_index": np.array(table_cell_index),
             "question_if_part_index": np.array(question_if_part_index),
-            "tag_labels": np.array(tags),
-            "if_tag_labels": np.array(if_tags),
             "paragraph_tokens": paragraph_tokens,
             "table_cell_tokens": table_cell_tokens,
             "answer_dict": answer_dict,
             "question_id": question_id,
-            "paragraph_mapping_content":paragraph_mapping_content,
-            "table_mapping_content":table_mapping_content,
         }
 
     def summerize_op(self, derivation, answer_type, facts, answer, answer_mapping, scale):
@@ -1051,28 +1140,20 @@ class TagTaTQATestReader(object):
             elif _is_division(num_facts, answer):
                 self.op_count["Division"] += 1
                 return "Division"
-
+                
 
     def _to_test_instance(self, question_text: str, question_if_text:str, table: List[List[str]], paragraphs: List[Dict], answer_from: str,
-                          answer_type: str, answer:str, counter_derivation: str, original_derivation:str,
-                          original_answer_mapping:Dict, counter_answer_mapping:Dict, if_mapping:Dict, counter_scale: str, question_id:str,
-                          counter_facts: List, if_op: str, is_counter: int):
+                          answer_type: str, answer:str, question_id:str, scale: str):
         #print('question_text', question_text)
         #print('question_if_text', question_if_text)
         #print(counter_answer_mapping, original_answer_mapping, if_mapping, if_op)
         #print(original_derivation, counter_derivation, counter_facts, answer)
         #print(answer_type)
-        if answer_type == 'arithmetic' and isinstance(answer,list):
-            answer = answer[0]
-
-        counter_gold_op = self.summerize_op(counter_derivation, answer_type, counter_facts, answer, counter_answer_mapping, counter_scale)
-        if counter_gold_op is None:
-            counter_gold_op = "ignore"
-            
-        #print('counter_gold_op', counter_gold_op)
         
-        table_cell_tokens, table_ids, table_tags, table_if_tags, table_cell_number_value, table_cell_index, table_mapping_content = \
-                            table_tokenize(table, self.tokenizer, original_answer_mapping, if_mapping)
+        dummy_dict = {}
+        
+        table_cell_tokens, table_ids, _, _, table_cell_number_value, table_cell_index, _ = \
+                            table_tokenize(table, self.tokenizer, dummy_dict, dummy_dict)
 
         for i in range(len(table)):
             for j in range(len(table[i])):
@@ -1093,9 +1174,9 @@ class TagTaTQATestReader(object):
         #print('table_cell_index', table_cell_index)
         #print('table_mapping_content', table_mapping_content)
 
-        paragraph_tokens, paragraph_ids, paragraph_tags, paragraph_if_tags, paragraph_word_piece_mask, paragraph_number_mask, \
-                paragraph_number_value, paragraph_index, paragraph_mapping_content= \
-            paragraph_tokenize(question_text, paragraphs, self.tokenizer, original_answer_mapping, if_mapping)
+        paragraph_tokens, paragraph_ids, _, _, paragraph_word_piece_mask, paragraph_number_mask, \
+                paragraph_number_value, paragraph_index, _= \
+            paragraph_tokenize(question_text, paragraphs, self.tokenizer, dummy_dict, dummy_dict)
 
         #print('paragraph_tokens', paragraph_tokens)
         #print('paragraph_tags',paragraph_tags)
@@ -1105,38 +1186,31 @@ class TagTaTQATestReader(object):
         #print('paragraph_mapping_content', paragraph_mapping_content)
 
 
-        question_and_if_tokens, question_and_if_ids, question_and_if_tags, question_and_if_if_tags, _,_, \
-                question_and_if_number_value, question_and_if_index, question_if_part_indicator, question_and_if_mapping_content= \
-            question_if_part_tokenize(question_text, question_if_text, self.tokenizer, original_answer_mapping, if_mapping)
+        question_and_if_tokens, question_and_if_ids, _, _, _,_, \
+                question_and_if_number_value, question_and_if_index, question_if_part_indicator, _= \
+            question_if_part_tokenize(question_text, question_if_text, self.tokenizer, dummy_dict, dummy_dict)
 
-        number_order_label = get_number_order_labels(paragraphs, table, question_text, counter_derivation, counter_gold_op,\
-                                    if_mapping, original_answer_mapping, question_id, self.OPERATOR_CLASSES,'test')
-        # print(number_order_label)
-        # assert len(question_if_part_indicator) == len(question_and_if_ids)
-
-        concat_params = {"question_and_if_ids": question_and_if_ids, "question_and_if_tags": question_and_if_tags, "question_and_if_if_tags": question_and_if_if_tags,
+        concat_params = {"question_and_if_ids": question_and_if_ids,
                          "question_and_if_index": question_and_if_index, "question_if_part_indicator": question_if_part_indicator, "question_and_if_number_value": question_and_if_number_value, "question_and_if_tokens": question_and_if_tokens,
-                         "paragraph_ids": paragraph_ids, "paragraph_tags": paragraph_tags, "paragraph_if_tags": paragraph_if_tags, "paragraph_index": paragraph_index,"paragraph_number_value": paragraph_number_value, "paragraph_tokens": paragraph_tokens,
-                         "table_ids": table_ids, "table_tags": table_tags, "table_if_tags": table_if_tags, "table_cell_index": table_cell_index, "table_cell_number_value": table_cell_number_value,
+                         "paragraph_ids": paragraph_ids, "paragraph_index": paragraph_index,"paragraph_number_value": paragraph_number_value, "paragraph_tokens": paragraph_tokens,
+                         "table_ids": table_ids,  "table_cell_index": table_cell_index, "table_cell_number_value": table_cell_number_value,
                          "sep_start": self.sep_start, "sep_end": self.sep_end, "question_length_limitation": self.question_length_limit, "passage_length_limitation": self.passage_length_limit, "max_pieces": self.max_pieces}
 
         input_ids, qtp_attention_mask, question_if_part_attention_mask, paragraph_mask, paragraph_number_value, paragraph_index, paragraph_tokens, \
-        table_mask, table_cell_number_value, table_cell_index, tags, if_tags, input_segments = _concat(**concat_params)
+        table_mask, table_cell_number_value, table_cell_index, input_segments = _test_concat(**concat_params)
        
         #if question_if_part_attention_mask.int().sum() == 0:
         #    raise RuntimeError("empty question if part", question_if_text, question_if_part_indicator)
             
-        answer_dict = {"answer_type": answer_type, "answer": answer, "scale": counter_scale, "answer_from": answer_from, "gold_scale":counter_scale, "gold_if_op": if_op, "gold_op": counter_gold_op, "number_order_label":number_order_label}
-                       
-        self.scale_count[counter_scale] += 1
-        
+        answer_dict = {"answer_type": answer_type, "answer": answer, "answer_from": answer_from , "scale": scale}
+
+        self.scale_count[scale] += 1
+
         make_instance = {"input_ids": np.array(input_ids), "qtp_attention_mask":  np.array(qtp_attention_mask),
         "question_if_part_attention_mask": np.array(question_if_part_attention_mask),
         "token_type_ids": np.array(input_segments), "paragraph_mask":np.array(paragraph_mask), "paragraph_number_value": np.array(paragraph_number_value), "paragraph_index": np.array(paragraph_index), "paragraph_tokens": paragraph_tokens,
         "table_mask": np.array(table_mask), "table_cell_number_value": np.array(table_cell_number_value), "table_cell_index": np.array(table_cell_index), "table_cell_tokens": table_cell_tokens,
-        "tag_labels": np.array(tags), "if_tag_labels": np.array(if_tags), "answer_dict": answer_dict, "question_id": question_id,
-         "paragraph_mapping_content":question_and_if_mapping_content + paragraph_mapping_content , "table_mapping_content": table_mapping_content,
-        "is_counter_arithmetic": int(is_counter == 1 and answer_type == 'arithmetic'), "is_original": 1 - is_counter}
+        "answer_dict": answer_dict, "question_id": question_id }
         
         return make_instance
 
@@ -1159,43 +1233,20 @@ class TagTaTQATestReader(object):
             reading_cnt += 1
             for question_answer in questions:
                 try:
-                    is_counter = question_answer["counterfactual"]
                     question = question_answer["question"]
-                    answer_type = question_answer["answer_type"]
-                    answer = question_answer["answer"]
-                    answer_from = question_answer["answer_from"]
-                    scale = question_answer["scale"]
-                    if is_counter:
+                    if "question_if_part" in question_answer:
                         question_if_part = question_answer["question_if_part"]
-                        if answer_type == 'arithmetic':
-                            original_answer_mapping = question_answer["original_answer_mapping"]
-                            counter_answer_mapping = question_answer["mapping"]
-                            facts = question_answer["counter_facts"] if "counter_facts" in question_answer else question_answer["facts"]
-                            counter_derivation = question_answer["derivation"]
-                            original_derivation = question_answer["original_derivation"]
-                            if_mapping = question_answer["if_mapping"] if "if_mapping" in question_answer else {}
-                            if_operator = question_answer["if_op"] if "if_op" in question_answer else 'NONE'
-                        else:
-                            original_answer_mapping = question_answer["mapping"]
-                            counter_answer_mapping = question_answer["mapping"]
-                            facts = question_answer["facts"] 
-                            counter_derivation = question_answer["derivation"]
-                            original_derivation = question_answer["derivation"]
-                            if_mapping = {}
-                            if_operator = 'NONE'
                     else:
-                        question_if_part = ""
-                        counter_derivation = question_answer["derivation"]
-                        original_derivation = question_answer["derivation"]
-                        if_mapping = {}
-                        if_operator = 'NONE'
-                        original_answer_mapping = question_answer["mapping"]
-                        counter_answer_mapping = question_answer["mapping"]
-                        facts = question_answer["facts"]
-                        
+                        if question_answer["counterfactual"]:
+                            question_if_part = get_question_if_part(question)
+                        else:
+                            question_if_part = ""
+                    answer_type = question_answer["answer_type"] if "answer_type" in question_answer else ""
+                    answer = question_answer["answer"] if "answer" in question_answer else ""
+                    answer_from = question_answer["answer_from"] if "answer_from" in question_answer else ""
+                    scale = question_answer["scale"] if "scale" in question_answer else ""
                     instance = self._to_test_instance(question, question_if_part, table, paragraphs, answer_from,
-                                    answer_type, answer, counter_derivation, original_derivation, original_answer_mapping,
-                                    counter_answer_mapping, if_mapping, scale, question_answer["uid"], facts, if_operator, is_counter)
+                                    answer_type, answer, question_answer["uid"], scale)
                     if instance is not None:
                         instances.append(instance)
                 except RuntimeError:
@@ -1211,7 +1262,7 @@ class TagTaTQATestReader(object):
                 #    print("AssertError. Total Error Count: {}".format(assert_error_count))
                 #except KeyError:
                 #    continue
-        print(self.op_count)
+        #print(self.op_count)
         print(self.scale_count)
         self.op_count = {"Span-in-text": 0, "Cell-in-table": 0, "Spans": 0, "Sum": 0, "Count": 0, "Average": 0,
                          "Multiplication": 0, "Division": 0, "Difference": 0, "Change ratio": 0}
@@ -1219,6 +1270,55 @@ class TagTaTQATestReader(object):
         print('total instances', len(instances))
         
         return instances
+
+def get_question_if_part(question):
+    start_if_word = ['If', 'Suppose','Given','When', 'Assuming']
+    text = copy.deepcopy(question.lower())
+    text = text[0].upper() + text[1:]
+    question_first_word = text[:text.index(' ')]
+    
+    if_part = None
+    w_part = None
+    
+    if question_first_word in start_if_word:
+        if 'what' in text or 'in which' in text:
+            ind = text.index('what') if 'what' in text else text.index('in which')
+            if_part = question[:ind ]
+            w_part = question[ind:]
+        elif ', ' in text:
+            ind = text.index(', ')
+            if_part = question[:ind + 1]
+            w_part = question[ind + 1:]
+        elif '. ' in text:
+            ind = ind = text.index('. ')
+            if_part = question[:ind + 1]
+            w_part = question[ind + 1:]
+        else:
+            pass
+    else:
+        if 'if' in text or 'when' in text or 'after' in text or 'given that' in text:
+            if 'if ' in text:
+                ind = text.index('if ')
+            elif 'when ' in text:
+                ind = text.index('when ')
+            elif 'after ' in text:
+                ind = text.index('after ')
+            elif 'given that ' in text:
+                ind = text.index('given that ')
+            else:
+                ind = len(text)
+            if_part = question[ind:]
+            w_part = question[:ind]
+        else:
+            pass
+      
+    if if_part is None or w_part is None:
+        if_part = ''
+        w_part = question
+
+    assert if_part + w_part == question or w_part + if_part == question
+    return if_part
+        
 
 # ### Beginning of everything related to segmented tensors ###
 

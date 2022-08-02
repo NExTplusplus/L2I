@@ -384,23 +384,15 @@ class TagopModel(nn.Module):
                 paragraph_mask,
                 table_mask,
                 token_type_ids: torch.LongTensor,
-                if_tag_labels: torch.LongTensor,
-                tag_labels: torch.LongTensor,
-                
+
                 paragraph_index: torch.LongTensor,
                 table_cell_index: torch.LongTensor,
             
-                counter_arithmetic_mask: torch.LongTensor, # not used here, re-calculated in the function
-                original_mask: torch.LongTensor, # not used here, re-calculated in the function
-                
                 gold_answers,
                 paragraph_tokens,
                 paragraph_numbers,
                 table_cell_tokens,
                 table_cell_numbers,
-                
-                paragraph_mapping_content=None,
-                table_mapping_content=None,
                 
                 question_ids=None,
                 position_ids=None,
@@ -787,17 +779,14 @@ class TagopModel(nn.Module):
                         pred_span += [operand_one, operand_two]
                         top_2_index += 1
 
-            output_dict[question_ids[bsz]] = {"target_fact":target_fact , "answer": answer, "scale": SCALE[int(predicted_scale_class[bsz])], "pred_span": pred_span, "gold_span": sorted(table_mapping_content[bsz] + paragraph_mapping_content[bsz]), "operator": current_op, "if_operator": int(predicted_if_operator_class[bsz])}
+            output_dict[question_ids[bsz]] = {"answer": answer, "scale": SCALE[int(predicted_scale_class[bsz])]}
             
             if predicted_operator_class[bsz] in self.arithmetic_op_index:
                 predict_type = "arithmetic"
             else:
                 predict_type = ""
             em, f1 = self._metrics({**gold_answers[bsz], "uid": question_ids[bsz]}, answer, predict_type,
-                          SCALE[int(predicted_scale_class[bsz])], pred_span,
-                          sorted(table_mapping_content[bsz] + paragraph_mapping_content[bsz]),
-                          pred_op=current_op, gold_op = gold_answers[bsz]["gold_op"], pred_order = predicted_order if "number_order_label" in gold_answers[bsz] and gold_answers[bsz]["number_order_label"] != -1 else None,
-                          gold_order=gold_answers[bsz]["number_order_label"] if "number_order_label" in gold_answers[bsz] and gold_answers[bsz]["number_order_label"] != -1 else None)
+                          SCALE[int(predicted_scale_class[bsz])])
             output_dict[question_ids[bsz]]["em"] = em
             output_dict[question_ids[bsz]]["f1"] = f1
             
@@ -813,7 +802,7 @@ class TagopModel(nn.Module):
     def get_metrics(self, logger=None, reset: bool = False) -> Dict[str, float]:
         detail_em, detail_f1 = self._metrics.get_detail_metric()
         raw_detail = self._metrics.get_raw_pivot_table()
-        exact_match, f1_score, scale_score, op_score, order_score= self._metrics.get_overall_metric(reset)
+        exact_match, f1_score, scale_score = self._metrics.get_overall_metric(reset)
         '''
         print(f"raw matrix:{raw_detail}\r\n")
         print(f"detail em:{detail_em}\r\n")
@@ -830,8 +819,8 @@ class TagopModel(nn.Module):
             logger.info(f"global em:{exact_match}\r\n")
             logger.info(f"global f1:{f1_score}\r\n")
             logger.info(f"global scale:{scale_score}\r\n")
-            logger.info(f"global op:{op_score}\r\n")
-            logger.info(f"global order:{order_score}\r\n")
+            #logger.info(f"global op:{op_score}\r\n")
+            #logger.info(f"global order:{order_score}\r\n")
         return {'em': exact_match, 'f1': f1_score, "scale": scale_score}
 
     def get_df(self):
@@ -1166,11 +1155,9 @@ def _index_reduce_max_get_vector(values_for_reduce, values_for_reference, index,
         index=flat_index.type(torch.long),
         dim=0,
         dim_size=num_index,
-    ) #
-    # reduce values 是0-512-的max值
-    # reduce index是对应的flat_value_for_reduce的index. size 是 0-512-524
-    reduce_index[reduce_index == -1] = flat_values_for_reference.shape[0] # 对应的flat value for reduce的index位置
-    reduce_values = reduce_values.view(bsz, -1) # 0 1 2 3... 512, 位置是index，不是和flat value for reduce对应的
+    )
+    reduce_index[reduce_index == -1] = flat_values_for_reference.shape[0]
+    reduce_values = reduce_values.view(bsz, -1)
     flat_values_for_reference = torch.cat(
         (flat_values_for_reference, torch.zeros(1, flat_values_for_reference.shape[1]).to(values_for_reduce.device)),
         dim=0)

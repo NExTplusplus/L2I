@@ -3,6 +3,8 @@ L2I: The baseline method for CCIR 22 competition
 
 This repositary contains the baseline method for CCIR 22 https://www.datafountain.cn/competitions/573
 
+**Update at 02 Aug 2022:** we revised the code to support directly predicting result for `tatqa_and_hqa_dataset_A.json`. Try running the code with the provided trained model and make a submission ~
+
 ## Dataset
 The data used for the competition is from **TAT-QA** ([paper](https://aclanthology.org/2021.acl-long.254.pdf)) ([github repo](https://github.com/NExTplusplus/TAT-QA)) and **TAT-HQA** ([paper](https://aclanthology.org/2022.acl-long.5.pdf)). Please refer to the paper for data collection process and baseline method description.
 

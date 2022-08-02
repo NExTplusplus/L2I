@@ -4,29 +4,34 @@ L2I: The baseline method for CCIR 22 competition
 This repositary contains the baseline method for CCIR 22 https://www.datafountain.cn/competitions/573
 
 ## Dataset
-The data used for the competition is from **TAT-QA** ([paper](https://aclanthology.org/2021.acl-long.254.pdf)) ([github repo](https://github.com/NExTplusplus/TAT-QA)) and **TAT-HQA** ([paper](https://aclanthology.org/2022.acl-long.5.pdf)) ([github repo]()). Please refer to the paper for data collection process and baseline method description.
+The data used for the competition is from **TAT-QA** ([paper](https://aclanthology.org/2021.acl-long.254.pdf)) ([github repo](https://github.com/NExTplusplus/TAT-QA)) and **TAT-HQA** ([paper](https://aclanthology.org/2022.acl-long.5.pdf)). Please refer to the paper for data collection process and baseline method description.
 
 The released training data `tatqa_and_hqa_dataset_train.json` is stored in `dataset_raw`, containing 13,251 factual questions and 6,621 hypothetical questions with ground-truth answers. You can split the data into training and validation set. 
 
-Note that to implement the methods in TAT-QA and TAT-HQA paper, we need to heuristically generate some extra fields from the original data, e.g. answer mapping, deriving operators. The data file containing the generated fields is in `dataset_extra_field`. You can optionally use the file.
+Note that to implement the methods in TAT-QA and TAT-HQA paper, we need to heuristically generate some extra fields from the original data, e.g. answer mapping, deriving operators. The data file containing the generated fields is in `dataset_extra_field/tatqa_and_hqa_field_train.json`. You can optionally use the file. To train the baseline method with the data containing extra fields, you can first split the data into train and validation set, named as `tatqa_and_hqa_field_[train/dev].json` and store in `dataset_extra_field`, which will be processed as the input of the model. 
 
-We name the the training and validation data split as `tatqa_and_hqa_field_[train/dev].json` and store in `dataset_extra_field`, which will be processed as the input of the model. 
+The data for submitting predicted results at stage A, `tatqa_and_hqa_dataset_A.json` is stored in `dataset_A`, renamed as `tatqa_and_hqa_dataset_dev.json`. 
 
 ## Requirements
 Please set up the environments according to [TAT-QA github repo](https://github.com/NExTplusplus/TAT-QA), create an environment and download the pre-trained `RoBERTa` model. 
 
 ## Data Processing
 
+To process the training data, run the following command. Please fill in the path to your downloaded roberta_model and select the mode `[train/dev]`. The processed train/dev data will be stored in `tag_op/data/roberta`. 
 ```bash
 PYTHONPATH=$PYTHONPATH:$(pwd):$(pwd)/tag_op python tag_op/prepare_dataset.py --input_path ./dataset_extra_field --output_dir tag_op/data/roberta --encoder roberta --roberta_model path_to_roberta_model --mode [train/dev]
 ```
-Please fill in the path to roberta_model and select the mode. The processed train/dev data will be stored in `tag_op/data/roberta`. 
+To process `dataset_A/tatqa_and_hqa_dataset_dev.json`, run the following command and will store the processed data in `tag_op/data/A`. 
+```bash
+PYTHONPATH=$PYTHONPATH:$(pwd):$(pwd)/tag_op python tag_op/prepare_dataset.py --input_path ./dataset_A --output_dir tag_op/data/A --encoder roberta --roberta_model path_to_roberta_model --mode dev --data_format tatqa_and_hqa_dataset_{}.json
+```
 
 ## Training
 
 ```bash
-CUDA_VISIBLE_DEVICES=0 PYTHONPATH=$PYTHONPATH:$(pwd):$(pwd)/tag_op python tag_op/trainer.py --data_dir tag_op/data/roberta --save_dir tag_op/model_L2I --batch_size 8 --eval_batch_size 8 --max_epoch 50 --warmup 0.06 --optimizer adam --learning_rate 5e-4  --weight_decay 5e-5 --seed 123 --gradient_accumulation_steps 4 --bert_learning_rate 1.5e-5 --bert_weight_decay 0.01 --log_per_updates 100 --eps 1e-6  --encoder roberta --test_data_dir tag_op/data/roberta/ --roberta_model path_to_roberta_model 
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH=$PYTHONPATH:$(pwd):$(pwd)/tag_op python tag_op/trainer.py --data_dir tag_op/data/roberta --save_dir tag_op/model_L2I --batch_size 32 --eval_batch_size 32 --max_epoch 50 --warmup 0.06 --optimizer adam --learning_rate 5e-4  --weight_decay 5e-5 --seed 123 --gradient_accumulation_steps 4 --bert_learning_rate 1.5e-5 --bert_weight_decay 0.01 --log_per_updates 100 --eps 1e-6  --encoder roberta --test_data_dir tag_op/data/roberta/ --roberta_model path_to_roberta_model 
 ```
+We provide a trained checkpoint for the baseline model at [this link](https://drive.google.com/file/d/1VzYy1a_PbOUnqZZLNW58jpWTFL8PRc3B/view?usp=sharing)
 
 ## Testing
 
@@ -34,7 +39,7 @@ CUDA_VISIBLE_DEVICES=0 PYTHONPATH=$PYTHONPATH:$(pwd):$(pwd)/tag_op python tag_op
 CUDA_VISIBLE_DEVICES=0 PYTHONPATH=$PYTHONPATH:$(pwd) python tag_op/predictor.py --data_dir tag_op/data/roberta --test_data_dir tag_op/data/roberta --save_dir tag_op/model_L2I --eval_batch_size 32 --model_path tag_op/model_L2I --encoder roberta --roberta_model path_to_roberta_model
 ```
 
-The prediction result for the validation split will be stored in `tag_op/model_L2I/answer_dev.json`
+Specify the test data via --test_data_dir, e.g. to predict the result for submission, set --test_data_dir tag_op/data/A. The predicted result will be stored in `tag_op/model_L2I/answer_dev.json`. 
 
 ## Result Evaluation
 

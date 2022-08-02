@@ -56,12 +56,22 @@ The code in this repo supports joint training of both factual and hypothetical q
 
 ## Citation 
 ```bash
-@inproceedings{li2022learning,
-  title={Learning to Imagine: Integrating Counterfactual Thinking in Neural Discrete Reasoning},
-  author={Li, Moxin and Feng, Fuli and Zhang, Hanwang and He, Xiangnan and Zhu, Fengbin and Chua, Tat-Seng},
-  booktitle={Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)},
-  pages={57--69},
-  year={2022}
+@inproceedings{li-etal-2022-learning,
+    title = "Learning to Imagine: Integrating Counterfactual Thinking in Neural Discrete Reasoning",
+    author = "Li, Moxin  and
+      Feng, Fuli  and
+      Zhang, Hanwang  and
+      He, Xiangnan  and
+      Zhu, Fengbin  and
+      Chua, Tat-Seng",
+    booktitle = "Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)",
+    month = may,
+    year = "2022",
+    address = "Dublin, Ireland",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2022.acl-long.5",
+    doi = "10.18653/v1/2022.acl-long.5",
+    pages = "57--69"
 }
 @inproceedings{zhu-etal-2021-tat,
     title = "{TAT}-{QA}: A Question Answering Benchmark on a Hybrid of Tabular and Textual Content in Finance",

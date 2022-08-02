@@ -36,16 +36,19 @@ CUDA_VISIBLE_DEVICES=0 PYTHONPATH=$PYTHONPATH:$(pwd):$(pwd)/tag_op python tag_op
 We provide a trained checkpoint for the baseline model at [this link](https://drive.google.com/file/d/1VzYy1a_PbOUnqZZLNW58jpWTFL8PRc3B/view?usp=sharing)
 
 ## Testing
-
+To evaluate your own splitted validation data, run
 ```bash
 CUDA_VISIBLE_DEVICES=0 PYTHONPATH=$PYTHONPATH:$(pwd) python tag_op/predictor.py --data_dir tag_op/data/roberta --test_data_dir tag_op/data/roberta --save_dir tag_op/model_L2I --eval_batch_size 32 --model_path tag_op/model_L2I --encoder roberta --roberta_model path_to_roberta_model
 ```
-
-Specify the path to test data via --test_data_dir, e.g. to predict the result for submission, set --test_data_dir tag_op/data/A. The predicted result will be stored in `tag_op/model_L2I/answer_dev.json`. 
+To generate prediction result for submission, run
+```bash
+CUDA_VISIBLE_DEVICES=0 PYTHONPATH=$PYTHONPATH:$(pwd) python tag_op/predictor.py --data_dir tag_op/data/roberta --test_data_dir tag_op/data/A --save_dir tag_op/model_L2I --eval_batch_size 32 --model_path tag_op/model_L2I --encoder roberta --roberta_model path_to_roberta_model
+```
+The predicted result will be stored in `tag_op/model_L2I/answer_dev.json`. 
 
 ## Result Evaluation
 
-Run `evaluate.py` by specifying the data file with gold answers and the predicted results. This will return the Exact Match and F1 score. 
+Run `evaluate.py` for your own validation data by specifying the data file with gold answers and the predicted results. This will return the Exact Match and F1 score. 
 
 ```bash
 python evaluate.py dataset_extra_field/tatqa_and_hqa_field_dev.json tag_op/model_L2I/answer_dev.json 0

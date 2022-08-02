@@ -39,7 +39,7 @@ We provide a trained checkpoint for the baseline model at [this link](https://dr
 CUDA_VISIBLE_DEVICES=0 PYTHONPATH=$PYTHONPATH:$(pwd) python tag_op/predictor.py --data_dir tag_op/data/roberta --test_data_dir tag_op/data/roberta --save_dir tag_op/model_L2I --eval_batch_size 32 --model_path tag_op/model_L2I --encoder roberta --roberta_model path_to_roberta_model
 ```
 
-Specify the test data via --test_data_dir, e.g. to predict the result for submission, set --test_data_dir tag_op/data/A. The predicted result will be stored in `tag_op/model_L2I/answer_dev.json`. 
+Specify the path to test data via --test_data_dir, e.g. to predict the result for submission, set --test_data_dir tag_op/data/A. The predicted result will be stored in `tag_op/model_L2I/answer_dev.json`. 
 
 ## Result Evaluation
 
